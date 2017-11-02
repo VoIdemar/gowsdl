@@ -30,6 +30,7 @@ type GoWSDL struct {
 	loc                   *Location
 	pkg                   string
 	ignoreTLS             bool
+	auth                  *basicAuth
 	makePublicFn          func(string) string
 	wsdl                  *WSDL
 	resolvedXSDExternals  map[string]bool
@@ -52,7 +53,7 @@ func dialTimeout(network, addr string) (net.Conn, error) {
 	return net.DialTimeout(network, addr, timeout)
 }
 
-func downloadFile(url string, ignoreTLS bool) ([]byte, error) {
+func downloadFile(url string, ignoreTLS bool, auth *basicAuth) ([]byte, error) {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: ignoreTLS,
@@ -61,7 +62,11 @@ func downloadFile(url string, ignoreTLS bool) ([]byte, error) {
 	}
 	client := &http.Client{Transport: tr}
 
-	resp, err := client.Get(url)
+	req, _ := http.NewRequest("GET", url, nil)
+	if auth != nil {
+		req.SetBasicAuth(auth.Login, auth.Password)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +85,7 @@ func downloadFile(url string, ignoreTLS bool) ([]byte, error) {
 }
 
 // NewGoWSDL initializes WSDL generator.
-func NewGoWSDL(file, pkg string, ignoreTLS bool, exportAllTypes bool) (*GoWSDL, error) {
+func NewGoWSDL(file, pkg string, ignoreTLS bool, exportAllTypes bool, auth *basicAuth) (*GoWSDL, error) {
 	file = strings.TrimSpace(file)
 	if file == "" {
 		return nil, errors.New("WSDL file is required to generate Go proxy")
@@ -103,6 +108,7 @@ func NewGoWSDL(file, pkg string, ignoreTLS bool, exportAllTypes bool) (*GoWSDL, 
 	return &GoWSDL{
 		loc:          r,
 		pkg:          pkg,
+		auth:         auth,
 		ignoreTLS:    ignoreTLS,
 		makePublicFn: makePublicFn,
 	}, nil
@@ -168,7 +174,7 @@ func (g *GoWSDL) fetchFile(loc *Location) (data []byte, err error) {
 		data, err = ioutil.ReadFile(loc.f)
 	} else {
 		log.Println("Downloading", "file", loc.u.String())
-		data, err = downloadFile(loc.u.String(), g.ignoreTLS)
+		data, err = downloadFile(loc.u.String(), g.ignoreTLS, g.auth)
 	}
 	return
 }
@@ -211,24 +217,24 @@ func (g *GoWSDL) resolveXSDExternals(schema *XSDSchema, loc *Location) error {
 			return err
 		}
 
-		newschema := new(XSDSchema)
+		newSchema := new(XSDSchema)
 
-		err = xml.Unmarshal(data, newschema)
+		err = xml.Unmarshal(data, newSchema)
 		if err != nil {
 			return err
 		}
 
-		if len(newschema.Includes) > 0 &&
+		if len(newSchema.Includes) > 0 &&
 			maxRecursion > g.currentRecursionLevel {
 			g.currentRecursionLevel++
 
-			err = g.resolveXSDExternals(newschema, location)
+			err = g.resolveXSDExternals(newSchema, location)
 			if err != nil {
 				return err
 			}
 		}
 
-		g.wsdl.Types.Schemas = append(g.wsdl.Types.Schemas, newschema)
+		g.wsdl.Types.Schemas = append(g.wsdl.Types.Schemas, newSchema)
 
 		if g.resolvedXSDExternals == nil {
 			g.resolvedXSDExternals = make(map[string]bool, maxRecursion)
