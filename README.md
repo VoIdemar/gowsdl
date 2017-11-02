@@ -1,37 +1,14 @@
 # WSDL to Go
 
-[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/hooklift/gowsdl?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-[![GoDoc](https://godoc.org/github.com/hooklift/gowsdl?status.svg)](https://godoc.org/github.com/hooklift/gowsdl)
-[![Build Status](https://travis-ci.org/hooklift/gowsdl.svg?branch=master)](https://travis-ci.org/hooklift/gowsdl)
-
 Generates Go code from a WSDL file.
+
+This is a fork of the "[hooklift/gowsdl](https://github.com/hooklift/gowsdl)" library which adds a couple of features to the original lib:
+* HTTP Basic Auth support
+* Removal of the type duplicates
+* XSDs from "includes" and "imports" are collected to the deepest level possible (original library stopped recursion if there were no includes in the current XSD).
 
 ### Install
 
-* [Download binary release](https://github.com/hooklift/gowsdl/releases)
-* Download and build locally: `go get github.com/hooklift/gowsdl/...`
-* Install from Homebrew: `brew install gowsdl`
+* Download and build locally: `go get github.com/VoIdemar/gowsdl/...`
 
-### Goals
-* Generate idiomatic Go code as much as possible
-* Support only Document/Literal wrapped services, which are [WS-I](http://ws-i.org/) compliant
-* Support:
-	* WSDL 1.1
-	* XML Schema 1.0
-	* SOAP 1.1
-* Resolve external XML Schemas
-* Support external and local WSDL
-
-### Caveats
-* Please keep in mind that the generated code is just a reflection of what the WSDL is like. If your WSDL has duplicated type definitions, your Go code is going to have the same and may not compile.
-
-### Usage
-```
-Usage: gowsdl [options] myservice.wsdl
-  -o string
-        File where the generated code will be saved (default "myservice.go")
-  -p string
-        Package under which code will be generated (default "myservice")
-  -i    Skips TLS Verification
-  -v    Shows gowsdl version
-  ```
+Please refer to the README page of the original library for more details.
