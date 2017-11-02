@@ -7,6 +7,7 @@ package gowsdl
 import (
 	"net/url"
 	"path/filepath"
+	"strings"
 )
 
 // A Location encapsulate information about the loc of WSDL/XSD.
@@ -39,7 +40,7 @@ func ParseLocation(rawloc string) (*Location, error) {
 // Parse returns nil, err on parse failure.
 func (r *Location) Parse(ref string) (*Location, error) {
 	if r.u != nil {
-		u, err := r.u.Parse(ref)
+		u, err := r.u.Parse(fixReference(ref))
 		if err != nil {
 			return nil, err
 		}
@@ -78,4 +79,13 @@ func (r *Location) String() string {
 		return r.u.String()
 	}
 	return ""
+}
+
+// Fix various mistakes in the specified URL
+func fixReference(ref string) string {
+	fixedRef := ref
+	if strings.HasPrefix(fixedRef, "//") {
+		fixedRef = strings.Replace(fixedRef, "//", "/", 1)
+	}
+	return fixedRef
 }
