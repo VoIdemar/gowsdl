@@ -85,7 +85,7 @@ func downloadFile(url string, ignoreTLS bool, auth *basicAuth) ([]byte, error) {
 }
 
 // NewGoWSDL initializes WSDL generator.
-func NewGoWSDL(file, pkg string, ignoreTLS bool, exportAllTypes bool, auth *basicAuth) (*GoWSDL, error) {
+func NewGoWSDL(file, pkg string, ignoreTLS bool, exportAllTypes bool) (*GoWSDL, error) {
 	file = strings.TrimSpace(file)
 	if file == "" {
 		return nil, errors.New("WSDL file is required to generate Go proxy")
@@ -108,10 +108,13 @@ func NewGoWSDL(file, pkg string, ignoreTLS bool, exportAllTypes bool, auth *basi
 	return &GoWSDL{
 		loc:          r,
 		pkg:          pkg,
-		auth:         auth,
 		ignoreTLS:    ignoreTLS,
 		makePublicFn: makePublicFn,
 	}, nil
+}
+
+func (g *GoWSDL) SetBasicAuth(login, password string) {
+	g.auth = &basicAuth{Login: login, Password: password}
 }
 
 // Start initiaties the code generation process by starting two goroutines: one
