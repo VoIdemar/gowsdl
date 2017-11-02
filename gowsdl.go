@@ -229,7 +229,7 @@ func (g *GoWSDL) resolveXSDExternals(schema *XSDSchema, loc *Location) error {
 			return err
 		}
 
-		if len(newSchema.Includes) > 0 &&
+		if (len(newSchema.Includes) > 0 || len(newSchema.Imports) > 0) &&
 			maxRecursion > g.currentRecursionLevel {
 			g.currentRecursionLevel++
 
