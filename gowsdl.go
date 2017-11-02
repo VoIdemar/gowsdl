@@ -124,6 +124,8 @@ func (g *GoWSDL) Start() (map[string][]byte, error) {
 		return nil, err
 	}
 
+	g.wsdl.refine()
+
 	// Process WSDL nodes
 	for _, schema := range g.wsdl.Types.Schemas {
 		newTraverser(schema, g.wsdl.Types.Schemas).traverse()
