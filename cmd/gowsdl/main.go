@@ -47,14 +47,12 @@ Make code generation agnostic so generating code to other programming languages 
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
-	"go/format"
 	"log"
 	"os"
 
-	gen "github.com/hooklift/gowsdl"
+	gen "github.com/VoIdemar/gowsdl"
 )
 
 // Version is initialized in compilation time by go build.
@@ -68,6 +66,9 @@ var pkg = flag.String("p", "myservice", "Package under which code will be genera
 var outFile = flag.String("o", "myservice.go", "File where the generated code will be saved")
 var insecure = flag.Bool("i", false, "Skips TLS Verification")
 var makePublic = flag.Bool("make-public", true, "Make the generated types public/exported")
+var ignoreTypeNs = flag.Bool("ignore-type-ns", false, "Consider types from XSD the same if they have equal names")
+var login = flag.String("login", "", "HTTP Basic auth login")
+var password = flag.String("password", "", "HTTP Basic auth password")
 
 func init() {
 	log.SetFlags(0)
@@ -100,41 +101,19 @@ func main() {
 		log.Fatalln("Output file cannot be the same WSDL file")
 	}
 
-	// load wsdl
-	gowsdl, err := gen.NewGoWSDL(wsdlPath, *pkg, *insecure, *makePublic)
-	if err != nil {
-		log.Fatalln(err)
+	generator := &gen.Generator{
+		WsdlPath:             wsdlPath,
+		Pkg:                  *pkg,
+		MakePublic:           *makePublic,
+		InsecureTLS:          *insecure,
+		Login:                *login,
+		Password:             *password,
+		IgnoreTypeNamespaces: *ignoreTypeNs,
+		OutFile:              *outFile,
 	}
-
-	// generate code
-	gocode, err := gowsdl.Start()
-	if err != nil {
-		log.Fatalln(err)
+	if err := generator.Generate(); err != nil {
+		log.Println("Error occurred: ", err)
+	} else {
+		log.Println("Done 👍")
 	}
-
-	pkg := "./" + *pkg
-	err = os.Mkdir(pkg, 0744)
-
-	file, err := os.Create(pkg + "/" + *outFile)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	defer file.Close()
-
-	data := new(bytes.Buffer)
-	data.Write(gocode["header"])
-	data.Write(gocode["types"])
-	data.Write(gocode["operations"])
-	data.Write(gocode["soap"])
-
-	// go fmt the generated code
-	source, err := format.Source(data.Bytes())
-	if err != nil {
-		file.Write(data.Bytes())
-		log.Fatalln(err)
-	}
-
-	file.Write(source)
-
-	log.Println("Done 👍")
 }
