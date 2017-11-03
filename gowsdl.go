@@ -23,7 +23,7 @@ import (
 	"unicode"
 )
 
-const maxRecursion uint8 = 20
+const maxRecursion uint8 = 100
 
 // GoWSDL defines the struct for WSDL generator.
 type GoWSDL struct {
@@ -117,7 +117,7 @@ func (g *GoWSDL) SetBasicAuth(login, password string) {
 	g.auth = &basicAuth{Login: login, Password: password}
 }
 
-// Start initiaties the code generation process by starting two goroutines: one
+// Start initiates the code generation process by starting two goroutines: one
 // to generate types and another one to generate operations.
 func (g *GoWSDL) Start() (map[string][]byte, error) {
 	gocode := make(map[string][]byte)
@@ -175,10 +175,10 @@ func (g *GoWSDL) Start() (map[string][]byte, error) {
 
 func (g *GoWSDL) fetchFile(loc *Location) (data []byte, err error) {
 	if loc.f != "" {
-		log.Println("Reading", "file", loc.f)
+		log.Println("[INFO] Reading", "file", loc.f)
 		data, err = ioutil.ReadFile(loc.f)
 	} else {
-		log.Println("Downloading", "file", loc.u.String())
+		log.Println("[INFO] Downloading", "file", loc.u.String())
 		data, err = downloadFile(loc.u.String(), g.ignoreTLS, g.auth)
 	}
 	return
@@ -191,14 +191,13 @@ func (g *GoWSDL) unmarshal() error {
 	}
 
 	g.wsdl = new(WSDL)
-	err = xml.Unmarshal(data, g.wsdl)
-	if err != nil {
+	if err = xml.Unmarshal(data, g.wsdl); err != nil {
 		return err
 	}
 
+	g.resolvedXSDExternals = make(map[string]bool, maxRecursion)
 	for _, schema := range g.wsdl.Types.Schemas {
-		err = g.resolveXSDExternals(schema, g.loc)
-		if err != nil {
+		if err = g.resolveXSDExternals(schema, g.loc); err != nil {
 			return err
 		}
 	}
@@ -207,67 +206,85 @@ func (g *GoWSDL) unmarshal() error {
 }
 
 func (g *GoWSDL) resolveXSDExternals(schema *XSDSchema, loc *Location) error {
-	download := func(base *Location, ref string) error {
-		location, err := base.Parse(ref)
-		if err != nil {
-			return err
-		}
-		schemaKey := location.String()
-		if g.resolvedXSDExternals[location.String()] {
-			return nil
-		}
-
-		var data []byte
-		if data, err = g.fetchFile(location); err != nil {
-			return err
-		}
-
-		newSchema := new(XSDSchema)
-
-		err = xml.Unmarshal(data, newSchema)
-		if err != nil {
-			return err
-		}
-
-		if (len(newSchema.Includes) > 0 || len(newSchema.Imports) > 0) &&
-			maxRecursion > g.currentRecursionLevel {
-			g.currentRecursionLevel++
-
-			err = g.resolveXSDExternals(newSchema, location)
-			if err != nil {
-				return err
-			}
-		}
-
-		g.wsdl.Types.Schemas = append(g.wsdl.Types.Schemas, newSchema)
-
-		if g.resolvedXSDExternals == nil {
-			g.resolvedXSDExternals = make(map[string]bool, maxRecursion)
-		}
-		g.resolvedXSDExternals[schemaKey] = true
-
+	if schema == nil || loc == nil {
 		return nil
 	}
 
-	for _, impts := range schema.Imports {
-		// Download the file only if we have a hint in the form of schemaLocation.
-		if impts.SchemaLocation == "" {
-			log.Printf("[WARN] Don't know where to find XSD for %s", impts.Namespace)
+	g.currentRecursionLevel++
+	if g.currentRecursionLevel > maxRecursion {
+		return nil
+	}
+
+	currentSchemaKey := loc.String()
+	if g.resolvedXSDExternals[currentSchemaKey] {
+		return nil
+	}
+	g.resolvedXSDExternals[currentSchemaKey] = true
+
+	log.Printf("[INFO] Resolving external XSDs for Schema %s", currentSchemaKey)
+
+	handleExternalSchema := func(base *Location, schemaLoc string) error {
+		var (
+			newSchema    *XSDSchema
+			newSchemaLoc *Location
+			err          error
+		)
+		if newSchema, newSchemaLoc, err = g.downloadSchemaIfRequired(loc, schemaLoc);
+			err == nil && newSchema != nil {
+			g.wsdl.Types.Schemas = append(g.wsdl.Types.Schemas, newSchema)
+			err = g.resolveXSDExternals(newSchema, newSchemaLoc)
+		}
+		return err
+	}
+
+	var err error
+	for _, impt := range schema.Imports {
+		if err != nil {
+			break
+		}
+		if impt.SchemaLocation == "" {
+			log.Printf("[WARN] Don't know where to find XSD for %s", impt.Namespace)
 			continue
 		}
-
-		if e := download(loc, impts.SchemaLocation); e != nil {
-			return e
-		}
+		err = handleExternalSchema(loc, impt.SchemaLocation)
 	}
-
 	for _, incl := range schema.Includes {
-		if e := download(loc, incl.SchemaLocation); e != nil {
-			return e
+		if err != nil {
+			break
 		}
+		if incl.SchemaLocation == "" {
+			continue
+		}
+		err = handleExternalSchema(loc, incl.SchemaLocation)
+	}
+	return err
+}
+
+func (g *GoWSDL) downloadSchemaIfRequired(base *Location,
+	locationRef string) (newSchema *XSDSchema,
+	newSchemaLoc *Location,
+	err error) {
+	if newSchemaLoc, err = base.Parse(locationRef); err != nil {
+		return
+	}
+	schemaKey := newSchemaLoc.String()
+	if g.resolvedXSDExternals[schemaKey] {
+		return
 	}
 
-	return nil
+	var data []byte
+	if data, err = g.fetchFile(newSchemaLoc); err != nil {
+		return
+	}
+
+	newSchema = new(XSDSchema)
+	if err = xml.Unmarshal(data, newSchema); err != nil {
+		return
+	}
+
+	log.Printf("[INFO] Downloaded Schema %s", newSchema.TargetNamespace)
+
+	return
 }
 
 func (g *GoWSDL) genTypes() ([]byte, error) {
