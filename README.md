@@ -12,3 +12,6 @@ This is a fork of the "[hooklift/gowsdl](https://github.com/hooklift/gowsdl)" li
 * Download and build locally: `go get github.com/VoIdemar/gowsdl/...`
 
 Please refer to the README page of the original library for more details.
+
+NB:
+Messed with commit history a bit :(
