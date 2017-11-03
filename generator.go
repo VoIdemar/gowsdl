@@ -23,7 +23,7 @@ func (r *Generator) Generate() (err error) {
 	// load wsdl
 	goWsdl, err := NewGoWSDL(r.WsdlPath, r.Pkg, r.InsecureTLS, r.MakePublic)
 	if err != nil {
-		log.Println(err)
+		log.Println("[ERROR] WSDL has not been loaded: ", err)
 		return
 	}
 	if len(r.Login) > 0 && len(r.Password) > 0 {
@@ -34,16 +34,18 @@ func (r *Generator) Generate() (err error) {
 	// generate code
 	goCode, err := goWsdl.Start()
 	if err != nil {
-		log.Println(err)
+		log.Println("[ERROR] Go code has not been generated: ", err)
 		return
 	}
 
-	pkgDir := path.Join(".", r.Pkg)
-	err = os.Mkdir(pkgDir, 0744)
+	if err = os.MkdirAll(path.Dir(r.OutFile), os.ModePerm); err != nil {
+		log.Println("[ERROR] Output directory has not been created: ", err)
+		return
+	}
 
-	file, err := os.Create(path.Join(pkgDir, r.OutFile))
+	file, err := os.Create(r.OutFile)
 	if err != nil {
-		log.Println(err)
+		log.Println("[ERROR] Output file has not been created: ", err)
 		return
 	}
 	defer file.Close()
@@ -58,7 +60,7 @@ func (r *Generator) Generate() (err error) {
 	source, err := format.Source(data.Bytes())
 	if err != nil {
 		file.Write(data.Bytes())
-		log.Println(err)
+		log.Println("[WARN] Code formatting failed: ", err)
 		return
 	}
 
