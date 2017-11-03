@@ -30,6 +30,7 @@ type GoWSDL struct {
 	loc                   *Location
 	pkg                   string
 	ignoreTLS             bool
+	ignoreTypeNs		  bool
 	auth                  *basicAuth
 	makePublicFn          func(string) string
 	wsdl                  *WSDL
@@ -117,6 +118,10 @@ func (g *GoWSDL) SetBasicAuth(login, password string) {
 	g.auth = &basicAuth{Login: login, Password: password}
 }
 
+func (g *GoWSDL) SetIgnoreTypeNamespaces(ignore bool) {
+	g.ignoreTypeNs = ignore
+}
+
 // Start initiates the code generation process by starting two goroutines: one
 // to generate types and another one to generate operations.
 func (g *GoWSDL) Start() (map[string][]byte, error) {
@@ -127,7 +132,7 @@ func (g *GoWSDL) Start() (map[string][]byte, error) {
 		return nil, err
 	}
 
-	g.wsdl.refine()
+	g.refineRawWsdlData()
 
 	// Process WSDL nodes
 	for _, schema := range g.wsdl.Types.Schemas {
@@ -285,6 +290,10 @@ func (g *GoWSDL) downloadSchemaIfRequired(base *Location,
 	log.Printf("[INFO] Downloaded Schema %s", newSchema.TargetNamespace)
 
 	return
+}
+
+func (g *GoWSDL) refineRawWsdlData() {
+	g.wsdl.refine(g.ignoreTypeNs)
 }
 
 func (g *GoWSDL) genTypes() ([]byte, error) {
